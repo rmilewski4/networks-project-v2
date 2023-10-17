@@ -2,7 +2,7 @@
 #Name: Ryan Milewski (rsmbby)
 #Date: 09/21/2023
 #Student Number: 18217022
-#Description: This implements the client side of the project V1 and allows for users to login, create users, send messages and logout.
+#Description: This implements the client side of the project V2 and allows for users to login, create users, send messages and logout.
 
 
 import socket
@@ -74,7 +74,7 @@ def logout():
     sys.exit()
     
 
-def send(message):
+def send(message, toUsername):
     #if the user is not logged in, give a prompt to login first and exit the function.
     if not loginStatus:
         print("> Denied. Please login first.")
@@ -83,8 +83,12 @@ def send(message):
     if len(message) > 256 or len(message) < 1:
         print("Message should be between 1 and 256 characters")
         return
+    #checking username length is valid
+    if len(toUsername) > 32 or len(toUsername) < 3:
+        print("Username should be between 3 and 32 characters")
+        return
     #formatting message to send to server with username and message.
-    dataSend = "send " + username + " " + message
+    dataSend = "send " + username + " " + toUsername + " " + message
     #send message and recieve from server.
     sendToServer(dataSend)
     receiveFromServer()
@@ -154,12 +158,12 @@ def loop():
         #checking to make sure valid number of arguments for newuser, then going to helper function
         elif splitInput[0] == "newuser" and len(splitInput) == 3:
             newuser(splitInput)
-        elif splitInput[0] == "send":
+        elif splitInput[0] == "send" and len(splitInput) > 2:
             #recombining message since it was split at the spaces. Ignore the "send" part of the given command
-            msgArr = (splitInput[1:])
+            msgArr = (splitInput[2:])
             #rejoin and add spaces back
             message = " ".join(msgArr)
-            send(message)
+            send(message, splitInput[1])
         #checking to make sure valid number of arguments for logout, then going to helper function
         elif splitInput[0] == "logout" and len(splitInput) == 1:
             logout()

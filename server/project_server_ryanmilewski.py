@@ -2,17 +2,65 @@
 #Name: Ryan Milewski (rsmbby)
 #Date: 09/21/2023
 #Student Number: 18217022
-#Description: This implements the server side of the project V1 and allows for users to login, create users, send messages and logout.
+#Description: This implements the server side of the project V2 and allows for users to login, create users, send messages and logout.
 
 
 #setting IP Addresss (localhost) and my port of 1 + 7022 which is my student ID.
 import socket
 import sys
+from _thread import *
+import threading
+
+print_lock = threading.Lock()
 ipaddr = "127.0.0.1"
 port = 17022
+MAXCLIENTS = 3
+#use dictionary to store who is currently logged in.
+loggedIn = {}
+def threaded(clientsocket, address):
+    with clientsocket:
+        while True:
+            #get the incoming data using recv with a 1024 byte buffer
+            dataRecv = clientsocket.recv(1024)
+            # if no data is recieved, then break out and close the connection.
+            if not dataRecv:
+                print_lock.release()
+                break
+            #decode the data and split it accordingly
+            decodedData = dataRecv.decode()
+            dataArr = decodedData.split(' ')
+            if dataArr[0] == "login":
+                #if we get to login, go to the login function, passing it the username and password recieved
+                returndata = loginUser(dataArr[1], dataArr[2], address)
+            elif dataArr[0] == "newuser":
+                #if we are creating a new user, pass it to the setupAccount function with username and password recieved
+                returndata = setupAccount(dataArr[1], dataArr[2])
+            elif dataArr[0] == "send" and dataArr[1] == "all":
+                #we know that the message is stored in the 3rd element of the data array and on so we will extract it and restore the message
+                msgArr = (dataArr[3:])
+                #rejoin the message and add the spaces back
+                message = " ".join(msgArr)
+                #set the return message to be the username plus the message.
+                returndata = sendToAll(dataArr[1], message)
+            elif dataArr[0] == "send":
+                #we know that the message is stored in the 3rd element of the data array and on so we will extract it and restore the message
+                msgArr = (dataArr[3:])
+                #rejoin the message and add the spaces back
+                message = " ".join(msgArr)
+                #set the return message to be the username plus the message.
+                returndata = sendTo(dataArr[2], dataArr[1], message)      
+            elif dataArr[0] == "logout":
+                #if the user is logging out, we will prompt all devices to let them know that the user left the chat room.
+                returndata = "> " + dataArr[1] + " left."
+                print(dataArr[1] + " logout.")
+            else:
+                returndata = "> an error occured, please check the syntax of your command and try again."
+            #we will send all the data back after going through one of those functions.
+            clientsocket.sendall(bytes(returndata, 'utf-8'))
 
 #helper function for when the user is trying to login
-def loginUser(username, password):
+def loginUser(username, password, address):
+    global loggedIn
     #try to open the file and perform the login, if unable to open because the file doesn't exist, then throw an error.
     try:
         #open file and scan it line by line
@@ -28,6 +76,7 @@ def loginUser(username, password):
                     #parsed so split[0] is the username and split[1] is password. If they match the ones from client, then login is confirmed
                     if split[0] == username and split[1] == password:
                         print(username + " login.")
+                        loggedIn[username] = address
                         return "> login confirmed."
         #otherwise login is denied and returned back to user.
         return "> Denied. User name or password incorrect"
@@ -68,7 +117,11 @@ def setupAccount(username, password):
     print("New user account created.")
     return "> New user account created. Please login"
 
+def sendTo(toUsername, fromUsername, message):
+    pass
 
+def sendToAll(fromUsername, message):
+    pass
 def loop():
     print("My chat room server. Version One.\n\n")
     #create server socket
@@ -76,7 +129,7 @@ def loop():
     try:
         #try to bind and start listening
         serversocket.bind((ipaddr, port))
-        serversocket.listen(1)
+        serversocket.listen(MAXCLIENTS)
     except socket.error as error:
         #if the socket is unable to bind or start listening, exit safely and respond with the error message.
         print("Error on active socket: ",error)
@@ -86,39 +139,9 @@ def loop():
         try:
             #wating for connections, will accept when one is recieved.
             (clientsocket, address) = serversocket.accept()
-            with clientsocket:
-                while True:
-                    #get the incoming data using recv with a 1024 byte buffer
-                    dataRecv = clientsocket.recv(1024)
-                    # if no data is recieved, then break out and close the connection.
-                    if not dataRecv:
-                        break
-                    #decode the data and split it accordingly
-                    decodedData = dataRecv.decode()
-                    dataArr = decodedData.split(' ')
-                    if dataArr[0] == "login":
-                        #if we get to login, go to the login function, passing it the username and password recieved
-                        returndata = loginUser(dataArr[1], dataArr[2])
-                    elif dataArr[0] == "newuser":
-                        #if we are creating a new user, pass it to the setupAccount function with username and password recieved
-                        returndata = setupAccount(dataArr[1], dataArr[2])
-                    elif dataArr[0] == "send":
-                        #we know that the message is stored in the 2nd element of the data array and on so we will extract it and restore the message
-                        msgArr = (dataArr[2:])
-                        #rejoin the message and add the spaces back
-                        message = " ".join(msgArr)
-                        #set the return message to be the username plus the message.
-                        data = dataArr[1] + ": " + message
-                        print(data)
-                        returndata = "> " + data
-                    elif dataArr[0] == "logout":
-                        #if the user is logging out, we will prompt all devices to let them know that the user left the chat room.
-                        returndata = "> " + dataArr[1] + " left."
-                        print(dataArr[1] + " logout.")
-                    else:
-                        returndata = "> an error occured, please check the syntax of your command and try again."
-                    #we will send all the data back after going through one of those functions.
-                    clientsocket.sendall(bytes(returndata, 'utf-8'))
+            #might need to remove this
+            print_lock.acquire()
+            start_new_thread(threaded,(clientsocket,address[1],))
         except:
             serversocket.close()
             sys.exit()
