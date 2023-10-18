@@ -93,6 +93,21 @@ def send(message, toUsername):
     sendToServer(dataSend)
     receiveFromServer()
 
+def sendAll(message):
+    #if the user is not logged in, give a prompt to login first and exit the function.
+    if not loginStatus:
+        print("> Denied. Please login first.")
+        return
+    #checking to make sure message is valid length, returning if not.
+    if len(message) > 256 or len(message) < 1:
+        print("Message should be between 1 and 256 characters")
+        return
+    #formatting message to send to server with username and message.
+    dataSend = "send " + username + " " + message
+    #send message and recieve from server.
+    sendToServer(dataSend)
+    receiveFromServer()
+
 #login helper function
 def login(splitInput):
     global loginStatus, username
@@ -143,6 +158,13 @@ def newuser(splitInput):
     sendToServer(dataSend)
     receiveFromServer()
 
+def who(): 
+    if not loginStatus:
+        print("Please login first.")
+        return
+    dataSend = "who " + username
+    sendToServer(dataSend)
+    receiveFromServer()
 
 def loop():
     print("My chat room client. Version One.\n\n")
@@ -158,12 +180,18 @@ def loop():
         #checking to make sure valid number of arguments for newuser, then going to helper function
         elif splitInput[0] == "newuser" and len(splitInput) == 3:
             newuser(splitInput)
+        elif splitInput[0] == "send" and splitInput[1] == "all" and len(splitInput) > 2:
+            msgArr = (splitInput[2:])
+            message = " ".join(msgArr)
+            sendAll(message)
         elif splitInput[0] == "send" and len(splitInput) > 2:
             #recombining message since it was split at the spaces. Ignore the "send" part of the given command
             msgArr = (splitInput[2:])
             #rejoin and add spaces back
             message = " ".join(msgArr)
             send(message, splitInput[1])
+        elif splitInput[0] == "who" and len(splitInput) == 1:
+            who()
         #checking to make sure valid number of arguments for logout, then going to helper function
         elif splitInput[0] == "logout" and len(splitInput) == 1:
             logout()
