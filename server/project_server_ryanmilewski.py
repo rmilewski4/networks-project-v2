@@ -4,6 +4,8 @@
 #Student Number: 18217022
 #Description: This implements the server side of the project V2 and allows for users to login, create users, send messages and logout.
 
+#TODO: Finish implementing send, sendall. Will also need to add all connected sockets to the connectionArr and remove them when disconnecting. Can send messages by accessing all sockets in the array.
+
 
 #setting IP Addresss (localhost) and my port of 1 + 7022 which is my student ID.
 import socket
@@ -17,6 +19,8 @@ port = 17022
 MAXCLIENTS = 3
 #use dictionary to store who is currently logged in.
 loggedIn = {}
+#array to store all active sockets
+connectionArr = []
 def threaded(clientsocket, address):
     with clientsocket:
         while True:
@@ -24,7 +28,6 @@ def threaded(clientsocket, address):
             dataRecv = clientsocket.recv(1024)
             # if no data is recieved, then break out and close the connection.
             if not dataRecv:
-                print_lock.release()
                 break
             #decode the data and split it accordingly
             decodedData = dataRecv.decode()
@@ -49,6 +52,8 @@ def threaded(clientsocket, address):
                 message = " ".join(msgArr)
                 #set the return message to be the username plus the message.
                 returndata = sendTo(dataArr[2], dataArr[1], message)      
+            elif dataArr[0] == "who":
+                returndata = who(dataArr[1])
             elif dataArr[0] == "logout":
                 #if the user is logging out, we will prompt all devices to let them know that the user left the chat room.
                 returndata = "> " + dataArr[1] + " left."
@@ -57,6 +62,11 @@ def threaded(clientsocket, address):
                 returndata = "> an error occured, please check the syntax of your command and try again."
             #we will send all the data back after going through one of those functions.
             clientsocket.sendall(bytes(returndata, 'utf-8'))
+
+def who(username):
+    print(loggedIn.keys())
+    response = ", ".join(loggedIn.keys())
+    return response
 
 #helper function for when the user is trying to login
 def loginUser(username, password, address):
@@ -139,8 +149,7 @@ def loop():
         try:
             #wating for connections, will accept when one is recieved.
             (clientsocket, address) = serversocket.accept()
-            #might need to remove this
-            print_lock.acquire()
+            connectionArr.append(clientsocket)
             start_new_thread(threaded,(clientsocket,address[1],))
         except:
             serversocket.close()
