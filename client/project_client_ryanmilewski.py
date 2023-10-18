@@ -4,16 +4,19 @@
 #Student Number: 18217022
 #Description: This implements the client side of the project V2 and allows for users to login, create users, send messages and logout.
 
+#TODO: Verify working and fix where > gets put.
 
 import socket
 import sys
+from _thread import *
+import threading
 #same address and port as server
 ipaddr = "127.0.0.1"
 port = 17022
 #global variables to check if user is currently logged and what the logged in user's name is.
 loginStatus = False
 username = ""
-
+lock = threading.Lock()
 try:
     #try and open a connection with server
     clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -38,18 +41,28 @@ def sendToServer(data):
         sys.exit()
 #helper function to recieve data from the server
 def receiveFromServer():
-    try:
-        #try and recieve the data over the socket with a 1024 byte buffer
-        dataRecv = clientsocket.recv(1024)
-        #decode the data since it was encoded at the server.
-        dataDecoded  = dataRecv.decode()
-        #print the decoded message to the client and return it in case a function will use the response.
-        print(dataDecoded)
-        return dataDecoded
-    except socket.error as error:
-        print("Error on active socket: ", error)
-        clientsocket.close()
-        sys.exit()
+    global username, loginStatus
+    while True:
+        with lock:
+            try:
+                #try and recieve the data over the socket with a 1024 byte buffer
+                dataRecv = clientsocket.recv(1024)
+                #fix
+                if not dataRecv:
+                    break
+                #decode the data since it was encoded at the server.
+                dataDecoded  = dataRecv.decode()
+                #print the decoded message to the client and return it in case a function will use the response.
+                print(dataDecoded)
+
+                if "confirmed" in dataDecoded:
+                    splitInput = dataDecoded.split(" ")
+                    loginStatus = True
+                    username = splitInput[1]
+            except socket.error as error:
+                print("Error on active socket: ", error)
+                clientsocket.close()
+                sys.exit()
 
 
 #helper function to logout
@@ -64,7 +77,7 @@ def logout():
     dataSend = "logout " + username
     #send + recieve from the server
     sendToServer(dataSend)
-    receiveFromServer()
+    #receiveFromServer()
     #close the connection
     clientsocket.close()
     #reset our global variables
@@ -91,7 +104,7 @@ def send(message, toUsername):
     dataSend = "send " + username + " " + toUsername + " " + message
     #send message and recieve from server.
     sendToServer(dataSend)
-    receiveFromServer()
+    #receiveFromServer()
 
 def sendAll(message):
     #if the user is not logged in, give a prompt to login first and exit the function.
@@ -103,10 +116,10 @@ def sendAll(message):
         print("Message should be between 1 and 256 characters")
         return
     #formatting message to send to server with username and message.
-    dataSend = "send " + username + " " + message
+    dataSend = "send all " + username + " " + message
     #send message and recieve from server.
     sendToServer(dataSend)
-    receiveFromServer()
+    #receiveFromServer()
 
 #login helper function
 def login(splitInput):
@@ -126,11 +139,7 @@ def login(splitInput):
     dataSend = splitInput[0] + " " + splitInput[1] + " " + splitInput[2]
     sendToServer(dataSend)
     #send + recieve
-    dataRecvDecoded = receiveFromServer()
-    #if login was confirmed, update global variables
-    if "confirmed" in dataRecvDecoded:
-        loginStatus = True
-        username = splitInput[1]
+    #dataRecvDecoded = receiveFromServer()
 
 #new user helper function
 def newuser(splitInput):
@@ -156,7 +165,7 @@ def newuser(splitInput):
     dataSend = splitInput[0] + " " + splitInput[1] + " " + splitInput[2]
     #send + recieve from server
     sendToServer(dataSend)
-    receiveFromServer()
+    #receiveFromServer()
 
 def who(): 
     if not loginStatus:
@@ -164,12 +173,13 @@ def who():
         return
     dataSend = "who " + username
     sendToServer(dataSend)
-    receiveFromServer()
+    #receiveFromServer()
 
 def loop():
     print("My chat room client. Version One.\n\n")
     while True:
         #get input and split it
+        initInput = ""
         initInput = input(">")
         splitInput = initInput.split(' ')
         #make command all lowercase to avoid errors
@@ -180,7 +190,7 @@ def loop():
         #checking to make sure valid number of arguments for newuser, then going to helper function
         elif splitInput[0] == "newuser" and len(splitInput) == 3:
             newuser(splitInput)
-        elif splitInput[0] == "send" and splitInput[1] == "all" and len(splitInput) > 2:
+        elif len(splitInput) > 2 and splitInput[0] == "send" and splitInput[1] == "all":
             msgArr = (splitInput[2:])
             message = " ".join(msgArr)
             sendAll(message)
@@ -201,4 +211,7 @@ def loop():
 
 
 if __name__ == "__main__":
-    loop()
+    recieveThread = threading.Thread(target=receiveFromServer)
+    recieveThread.start()
+    loopThread = threading.Thread(target=loop)
+    loopThread.start()
