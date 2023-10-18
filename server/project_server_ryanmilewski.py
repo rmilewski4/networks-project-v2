@@ -13,14 +13,13 @@ import sys
 from _thread import *
 import threading
 
-print_lock = threading.Lock()
 ipaddr = "127.0.0.1"
 port = 17022
 MAXCLIENTS = 3
 #use dictionary to store who is currently logged in.
 loggedIn = {}
 #array to store all active sockets
-connectionArr = []
+connectionArr = {}
 def threaded(clientsocket, address):
     with clientsocket:
         while True:
@@ -35,33 +34,45 @@ def threaded(clientsocket, address):
             if dataArr[0] == "login":
                 #if we get to login, go to the login function, passing it the username and password recieved
                 returndata = loginUser(dataArr[1], dataArr[2], address)
+                clientsocket.sendall(bytes(returndata, 'utf-8'))
             elif dataArr[0] == "newuser":
                 #if we are creating a new user, pass it to the setupAccount function with username and password recieved
                 returndata = setupAccount(dataArr[1], dataArr[2])
+                clientsocket.sendall(bytes(returndata, 'utf-8'))
             elif dataArr[0] == "send" and dataArr[1] == "all":
                 #we know that the message is stored in the 3rd element of the data array and on so we will extract it and restore the message
                 msgArr = (dataArr[3:])
                 #rejoin the message and add the spaces back
                 message = " ".join(msgArr)
                 #set the return message to be the username plus the message.
-                returndata = sendToAll(dataArr[1], message)
+                sendToAll(dataArr[2], message)
             elif dataArr[0] == "send":
                 #we know that the message is stored in the 3rd element of the data array and on so we will extract it and restore the message
                 msgArr = (dataArr[3:])
                 #rejoin the message and add the spaces back
                 message = " ".join(msgArr)
                 #set the return message to be the username plus the message.
-                returndata = sendTo(dataArr[2], dataArr[1], message)      
+                returndata = sendTo(dataArr[2], dataArr[1], message)   
+                if returndata != "":
+                    clientsocket.sendall(bytes(returndata, 'utf-8'))   
             elif dataArr[0] == "who":
                 returndata = who(dataArr[1])
+                clientsocket.sendall(bytes(returndata, 'utf-8'))
             elif dataArr[0] == "logout":
                 #if the user is logging out, we will prompt all devices to let them know that the user left the chat room.
-                returndata = "> " + dataArr[1] + " left."
-                print(dataArr[1] + " logout.")
+                logout(dataArr[1])
             else:
                 returndata = "> an error occured, please check the syntax of your command and try again."
             #we will send all the data back after going through one of those functions.
-            clientsocket.sendall(bytes(returndata, 'utf-8'))
+def logout(username):
+    global connectionArr
+    data = "> " + username + "left."
+    removeAddr = loggedIn[username]
+    print(username + " logout.")
+    for client in connectionArr.values():
+            client.sendall(bytes(data, 'utf-8'))
+    loggedIn.pop(username)
+    connectionArr.pop(removeAddr)
 
 def who(username):
     print(loggedIn.keys())
@@ -87,7 +98,7 @@ def loginUser(username, password, address):
                     if split[0] == username and split[1] == password:
                         print(username + " login.")
                         loggedIn[username] = address
-                        return "> login confirmed."
+                        return "> " + username + " login confirmed."
         #otherwise login is denied and returned back to user.
         return "> Denied. User name or password incorrect"
     except FileNotFoundError:
@@ -128,10 +139,22 @@ def setupAccount(username, password):
     return "> New user account created. Please login"
 
 def sendTo(toUsername, fromUsername, message):
-    pass
+    if not (toUsername in loggedIn.keys()):
+        print("User " + toUsername + " not logged in.")
+        return "> Error. " + toUsername + " not logged in."
+    print(fromUsername + " (to " + toUsername + "): " + message)
+    data = "> " + fromUsername + " (private message): " + message 
+    for clients in connectionArr.keys():
+        if(clients == loggedIn[toUsername]):
+            connectionArr[clients].sendall(bytes(data, 'utf-8'))
+    return ""
 
 def sendToAll(fromUsername, message):
-    pass
+    data = "> " + fromUsername + ": " + message
+    for client in connectionArr.values():
+        client.sendall(bytes(data, 'utf-8'))
+    print(fromUsername + ": " + message)
+
 def loop():
     print("My chat room server. Version One.\n\n")
     #create server socket
@@ -149,8 +172,9 @@ def loop():
         try:
             #wating for connections, will accept when one is recieved.
             (clientsocket, address) = serversocket.accept()
-            connectionArr.append(clientsocket)
+            connectionArr[address[1]] = clientsocket
             start_new_thread(threaded,(clientsocket,address[1],))
+            
         except:
             serversocket.close()
             sys.exit()
