@@ -1,4 +1,4 @@
-# Networks Project V1
+# Networks Project V2
 
 To run the project, ensure that you have python 3.3 or newer installed. All libraries used are default python libraries.
 
