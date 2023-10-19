@@ -4,8 +4,6 @@
 #Student Number: 18217022
 #Description: This implements the client side of the project V2 and allows for users to login, create users, send messages and logout.
 
-#TODO: Verify working and fix where > gets put.
-
 import socket
 import sys
 from _thread import *
@@ -16,7 +14,6 @@ port = 17022
 #global variables to check if user is currently logged and what the logged in user's name is.
 loginStatus = False
 username = ""
-lock = threading.Lock()
 try:
     #try and open a connection with server
     clientsocket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -41,28 +38,23 @@ def sendToServer(data):
         sys.exit()
 #helper function to recieve data from the server
 def receiveFromServer():
-    global username, loginStatus
+    global loginStatus
     while True:
-        with lock:
-            try:
-                #try and recieve the data over the socket with a 1024 byte buffer
-                dataRecv = clientsocket.recv(1024)
-                #fix
-                if not dataRecv:
-                    break
-                #decode the data since it was encoded at the server.
-                dataDecoded  = dataRecv.decode()
-                #print the decoded message to the client and return it in case a function will use the response.
-                print(dataDecoded)
-
-                if "confirmed" in dataDecoded:
-                    splitInput = dataDecoded.split(" ")
-                    loginStatus = True
-                    username = splitInput[1]
-            except socket.error as error:
-                print("Error on active socket: ", error)
-                clientsocket.close()
-                sys.exit()
+        try:
+            #try and recieve the data over the socket with a 1024 byte buffer
+            dataRecv = clientsocket.recv(1024)
+            #fix
+            if not dataRecv:
+                break
+            #decode the data since it was encoded at the server.
+            dataDecoded  = dataRecv.decode()
+            #print the decoded message to the client
+            print(dataDecoded)
+            #if user was logged in , update global variables
+            if "confirmed" in dataDecoded:
+                loginStatus = True
+        except socket.error as error:
+            sys.exit()
 
 
 #helper function to logout
@@ -71,13 +63,12 @@ def logout():
     global username, loginStatus
     #if the user is logged out, print an error message and exit the function
     if not loginStatus:
-        print("You must first login to logout.")
+        print("> You must first login to logout.")
         return
     #otherwise send the logout command plus the name of the user logging out
     dataSend = "logout " + username
-    #send + recieve from the server
+    #send to the server
     sendToServer(dataSend)
-    #receiveFromServer()
     #close the connection
     clientsocket.close()
     #reset our global variables
@@ -94,17 +85,16 @@ def send(message, toUsername):
         return
     #checking to make sure message is valid length, returning if not.
     if len(message) > 256 or len(message) < 1:
-        print("Message should be between 1 and 256 characters")
+        print("> Message should be between 1 and 256 characters")
         return
     #checking username length is valid
     if len(toUsername) > 32 or len(toUsername) < 3:
-        print("Username should be between 3 and 32 characters")
+        print("> Username should be between 3 and 32 characters")
         return
     #formatting message to send to server with username and message.
     dataSend = "send " + username + " " + toUsername + " " + message
-    #send message and recieve from server.
+    #send message to server.
     sendToServer(dataSend)
-    #receiveFromServer()
 
 def sendAll(message):
     #if the user is not logged in, give a prompt to login first and exit the function.
@@ -117,70 +107,65 @@ def sendAll(message):
         return
     #formatting message to send to server with username and message.
     dataSend = "send all " + username + " " + message
-    #send message and recieve from server.
+    #send message to server.
     sendToServer(dataSend)
-    #receiveFromServer()
 
 #login helper function
 def login(splitInput):
     global loginStatus, username
     #if user is logged in, prompt a message to logout first and exit the function.
     if loginStatus:
-        print("Please logout first before trying to login")
+        print("> Please logout first before trying to login")
         return
     #checking username length is valid
     if len(splitInput[1]) > 32 or len(splitInput[1]) < 3:
-        print("Username should be between 3 and 32 characters")
+        print("> Username should be between 3 and 32 characters")
         return
     #checking password length is valid
     if len(splitInput[2]) < 4 or len(splitInput[2]) > 8:
-        print("Password should be between 4 and 8 characters")
+        print("> Password should be between 4 and 8 characters")
         return
     dataSend = splitInput[0] + " " + splitInput[1] + " " + splitInput[2]
     sendToServer(dataSend)
-    #send + recieve
-    #dataRecvDecoded = receiveFromServer()
+    username = splitInput[1]
 
 #new user helper function
 def newuser(splitInput):
     #if user is logged in, prompt a message to logout first and exit the function.
     if loginStatus:
-        print("Please logout first before creating a new user.")
+        print("> Please logout first before creating a new user.")
         return
     #checking username is valid length
     if len(splitInput[1]) > 32 or len(splitInput[1]) < 3:
-        print("Username should be between 3 and 32 characters")
+        print("> Username should be between 3 and 32 characters")
         return
     #since our users.txt file uses a format that stores the credentials in parenthesis with a comma separating, we can't allow these to be used for the credentials as it will mess with our login function.
     if "," in splitInput[1] or "(" in splitInput[1] or ")" in splitInput[1]:
-        print("Invalid Character. Please do not use commas , or parenthesis ( or ) in your username.")
+        print("> Invalid Character. Please do not use commas , or parenthesis ( or ) in your username.")
         return
     #checkig password is valid length
     if len(splitInput[2]) < 4 or len(splitInput[2]) > 8:
-        print("Password should be between 4 and 8 characters")
+        print("> Password should be between 4 and 8 characters")
         return
     if "," in splitInput[2] or "(" in splitInput[2] or ")" in splitInput[2]:
-        print("Invalid Character. Please do not use commas , or parenthesis ( or ) in your password.")
+        print("> Invalid Character. Please do not use commas , or parenthesis ( or ) in your password.")
         return
     dataSend = splitInput[0] + " " + splitInput[1] + " " + splitInput[2]
-    #send + recieve from server
     sendToServer(dataSend)
-    #receiveFromServer()
 
 def who(): 
+    #check for login status
     if not loginStatus:
-        print("Please login first.")
+        print("> Please login first.")
         return
     dataSend = "who " + username
     sendToServer(dataSend)
-    #receiveFromServer()
 
 def loop():
     print("My chat room client. Version One.\n\n")
     while True:
         #get input and split it
-        initInput = ""
-        initInput = input(">")
+        initInput = input()
         splitInput = initInput.split(' ')
         #make command all lowercase to avoid errors
         splitInput[0] = splitInput[0].lower()
@@ -211,7 +196,7 @@ def loop():
 
 
 if __name__ == "__main__":
+    #open thread to recieve data from the server
     recieveThread = threading.Thread(target=receiveFromServer)
     recieveThread.start()
-    loopThread = threading.Thread(target=loop)
-    loopThread.start()
+    loop()
